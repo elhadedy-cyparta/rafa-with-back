@@ -21,6 +21,10 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-key-for-development-o
 DEBUG = os.environ.get("DEBUG", "False") == "True"
 
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,d8c8kgcw4gowcscg4s4c40ck.apirafal.cyparta.com").split(",")
+CSRF_TRUSTED_ORIGINS = [
+    "https://d8c8kgcw4gowcscg4s4c40ck.apirafal.cyparta.com",
+    "https://apirafal.cyparta.com",
+]
 
 # Application definition
 INSTALLED_APPS = [
