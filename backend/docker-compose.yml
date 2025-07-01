@@ -8,6 +8,7 @@ services:
       - .:/app
       - static_volume:/app/staticfiles
       - media_volume:/app/media
+      - sqlite_data:/app/database          # ✅ ربط مجلد وليس ملف
     env_file:
       - .env
     ports:
@@ -50,3 +51,4 @@ services:
 volumes:
   static_volume:
   media_volume:
+  sqlite_data:
