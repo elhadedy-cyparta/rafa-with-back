@@ -68,6 +68,18 @@ class ProductImageSerializer(serializers.ModelSerializer):
         fields = ['id', 'image', 'color', 'is_primary', 'order']
 
 
+class ProductSerializer(serializers.ModelSerializer):
+    """Basic product serializer for use in other apps"""
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    
+    class Meta:
+        model = Product
+        fields = [
+            'id', 'name', 'price', 'original_price', 'image',
+            'category', 'category_name', 'in_stock'
+        ]
+
+
 class ProductListSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
     discount_percentage = serializers.IntegerField(read_only=True)
