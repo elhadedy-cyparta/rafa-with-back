@@ -39,8 +39,8 @@ This is the backend API for the RAFAL Electric E-commerce platform. It provides 
 ### Prerequisites
 
 - Python 3.8+
-- PostgreSQL (recommended) or SQLite
-- Redis (for Celery)
+- SQLite (included with Python)
+- Redis (optional, for Celery)
 
 ### Installation
 
@@ -167,6 +167,12 @@ This architecture allows for:
 - Isolation of provider-specific code
 - Simplified maintenance and updates
 - Better error handling and debugging
+
+## Database
+
+The project uses SQLite as the database, which is included with Python. This makes it easy to set up and run the project without installing additional database software.
+
+The database file is stored at `db.sqlite3` in the project root directory.
 
 ## License
 

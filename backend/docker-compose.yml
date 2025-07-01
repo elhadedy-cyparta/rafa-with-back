@@ -10,26 +10,11 @@ services:
       - media_volume:/app/media
     env_file:
       - .env
-    depends_on:
-      - db
-      - redis
     ports:
       - "8000:8000"
     command: >
       sh -c "python manage.py migrate &&
              python manage.py runserver 0.0.0.0:8000"
-
-  db:
-    image: postgres:14
-    restart: always
-    volumes:
-      - postgres_data:/var/lib/postgresql/data/
-    environment:
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_USER=postgres
-      - POSTGRES_DB=rafal_db
-    ports:
-      - "5432:5432"
 
   redis:
     image: redis:7
@@ -63,6 +48,5 @@ services:
     command: celery -A rafal_backend beat -l INFO
 
 volumes:
-  postgres_data:
   static_volume:
   media_volume:
