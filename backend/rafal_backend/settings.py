@@ -29,6 +29,7 @@ ALLOWED_HOSTS = [
 ]
 CSRF_TRUSTED_ORIGINS = [
     "https://d8c8kgcw4gowcscg4s4c40ck.apirafal.cyparta.com",
+    "http://d8c8kgcw4gowcscg4s4c40ck.apirafal.cyparta.com",
     "https://apirafal.cyparta.com",
 ]
 
