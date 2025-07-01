@@ -35,7 +35,6 @@ class CategoryAdmin(admin.ModelAdmin):
     list_display = ('name', 'parent', 'order', 'is_active')
     list_filter = ('is_active', 'parent')
     search_fields = ('name', 'description')
-    prepopulated_fields = {'slug': ('name',)}
     list_editable = ('order', 'is_active')
 
 
