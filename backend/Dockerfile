@@ -20,4 +20,4 @@ COPY . /app/
 RUN python manage.py collectstatic --noinput
 
 # Run gunicorn
-CMD gunicorn rafal_backend.wsgi:application --bind 0.0.0.0:8000
+CMD gunicorn rafal_backend.wsgi:application --bind 0.0.0.0:8888
