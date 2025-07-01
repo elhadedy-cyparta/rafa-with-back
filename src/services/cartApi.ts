@@ -25,11 +25,11 @@ export interface CartResponse {
 }
 
 export class CartService {
-  private static readonly API_BASE_URL = 'https://apirafal.cyparta.com';
-  private static readonly CART_ENDPOINT = '/cart/';
-  private static readonly ADD_TO_CART_ENDPOINT = '/cart/add-to-cart/';
-  private static readonly REMOVE_FROM_CART_ENDPOINT = '/cart/remove-from-cart/';
-  private static readonly GET_CART_ENDPOINT = '/cart/';
+  private static readonly API_BASE_URL = 'http://localhost:8000';
+  private static readonly CART_ENDPOINT = '/api/orders/cart/';
+  private static readonly ADD_TO_CART_ENDPOINT = '/api/orders/cart-items/add_to_cart/';
+  private static readonly REMOVE_FROM_CART_ENDPOINT = '/api/orders/cart-items/remove_from_cart/';
+  private static readonly UPDATE_QUANTITY_ENDPOINT = '/api/orders/cart-items/update_quantity/';
   private static readonly CACHE_KEY = 'rafal_cart_cache';
   private static readonly SESSION_KEY_STORAGE = 'rafal_cart_session_key';
   private static readonly CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
@@ -64,7 +64,7 @@ export class CartService {
 
   // Default headers for API requests
   private static getHeaders(): HeadersInit {
-    return {
+    const headers: HeadersInit = {
       'Accept': 'application/json, text/plain, */*',
       'Content-Type': 'application/json',
       'sec-ch-ua': '"Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"',
@@ -72,6 +72,14 @@ export class CartService {
       'sec-ch-ua-platform': '"Linux"',
       'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36'
     };
+
+    // Add authorization header if user is logged in
+    const token = localStorage.getItem('rafal_auth_token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return headers;
   }
 
   // Add product to cart
@@ -92,16 +100,13 @@ export class CartService {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
         
-        // Construct the URL with the product ID
-        const url = `${this.API_BASE_URL}${this.ADD_TO_CART_ENDPOINT}${productId}/`;
-        
         // Get session key
         const sessionKey = this.getSessionKey();
         
         // Prepare the request body
         const body: any = {
-          quantity,
-          session_key: sessionKey
+          product_id: productId,
+          quantity
         };
         
         // Add color_id if provided
@@ -109,7 +114,7 @@ export class CartService {
           body.color_id = colorId;
         }
         
-        const response = await fetch(url, {
+        const response = await fetch(`${this.API_BASE_URL}${this.ADD_TO_CART_ENDPOINT}?session_key=${encodeURIComponent(sessionKey)}`, {
           method: 'POST',
           headers: this.getHeaders(),
           body: JSON.stringify(body),
@@ -192,16 +197,10 @@ export class CartService {
         // Get session key
         const sessionKey = this.getSessionKey();
         
-        // Get cart ID from localStorage
-        const cartId = localStorage.getItem('rafal_cart_id') || '';
-        
-        // Construct the URL with the cart ID and session key
-        const url = `${this.API_BASE_URL}/cart/${cartId}/?session_key=${encodeURIComponent(sessionKey)}`;
-        
-        const response = await fetch(url, {
-          method: 'DELETE',
+        const response = await fetch(`${this.API_BASE_URL}${this.REMOVE_FROM_CART_ENDPOINT}?session_key=${encodeURIComponent(sessionKey)}`, {
+          method: 'POST',
           headers: this.getHeaders(),
-          body: JSON.stringify({ cartitem_id: parseInt(itemId) }),
+          body: JSON.stringify({ cartitem_id: itemId }),
           signal: controller.signal
         });
 
@@ -273,6 +272,11 @@ export class CartService {
     try {
       console.log(`🔄 Updating quantity for item ${itemId} to ${quantity}...`);
       
+      // If quantity is 0, remove the item
+      if (quantity <= 0) {
+        return this.removeFromCart(itemId);
+      }
+      
       // Create the request promise
       this.pendingRequests[requestKey] = (async () => {
         const controller = new AbortController();
@@ -281,35 +285,11 @@ export class CartService {
         // Get session key
         const sessionKey = this.getSessionKey();
         
-        // Get cart ID from localStorage
-        const cartId = localStorage.getItem('rafal_cart_id') || '';
-        
-        // Construct the URL with the cart ID and session key
-        const url = `${this.API_BASE_URL}/cart/${cartId}/?session_key=${encodeURIComponent(sessionKey)}`;
-        
-        // Get product ID from cart items
-        let productId = '';
-        try {
-          const cachedCart = this.getCachedCart();
-          if (cachedCart) {
-            const cartItem = cachedCart.items.find(item => item.id === itemId);
-            if (cartItem) {
-              productId = cartItem.product_id;
-            }
-          }
-        } catch (error) {
-          console.warn('⚠️ Failed to get product ID from cached cart:', error);
-        }
-        
-        if (!productId) {
-          console.warn(`⚠️ Could not find product ID for cart item ${itemId}`);
-        }
-        
-        const response = await fetch(url, {
+        const response = await fetch(`${this.API_BASE_URL}${this.UPDATE_QUANTITY_ENDPOINT}?session_key=${encodeURIComponent(sessionKey)}`, {
           method: 'PATCH',
           headers: this.getHeaders(),
           body: JSON.stringify({ 
-            product_id: parseInt(productId),
+            cartitem_id: itemId,
             quantity: quantity
           }),
           signal: controller.signal
@@ -392,7 +372,7 @@ export class CartService {
         const sessionKey = this.getSessionKey();
         
         // Add session key as query parameter
-        const url = `${this.API_BASE_URL}${this.GET_CART_ENDPOINT}?session_key=${encodeURIComponent(sessionKey)}`;
+        const url = `${this.API_BASE_URL}${this.CART_ENDPOINT}current/?session_key=${encodeURIComponent(sessionKey)}`;
         
         const response = await fetch(url, {
           method: 'GET',
@@ -552,53 +532,25 @@ export class CartService {
     }
 
     try {
-      // Handle different possible API response structures
-      let cartData = data;
-      
-      // If data is an array, take the first item
-      if (Array.isArray(data) && data.length > 0) {
-        cartData = data[0];
-        console.log('📋 Cart API response is an array, using first item');
-      } else if (data.cart) {
-        cartData = data.cart;
-        console.log('📋 Cart API response has cart property');
-      } else if (data.data && data.data.cart) {
-        cartData = data.data.cart;
-        console.log('📋 Cart API response has data.cart property');
-      }
-
       // Extract cart items
       let cartItems: CartItem[] = [];
       
-      if (Array.isArray(cartData.items)) {
-        cartItems = cartData.items.map((item: any) => ({
-          id: item.id?.toString() || item.cart_item_id?.toString() || `item-${Date.now()}-${Math.random()}`,
-          product_id: item.product_id?.toString() || item.product?.id?.toString() || '',
-          name: item.name || item.product_name || item.product?.name || 'Unnamed Product',
-          price: this.parsePrice(item.price || item.product_price || item.product?.price || 0),
+      if (Array.isArray(data.items)) {
+        cartItems = data.items.map((item: any) => ({
+          id: item.id?.toString() || `item-${Date.now()}-${Math.random()}`,
+          product_id: item.product?.id?.toString() || '',
+          name: item.product?.name || 'Unnamed Product',
+          price: this.parsePrice(item.product?.price || 0),
           quantity: parseInt(item.quantity || '1'),
-          image: this.normalizeImageUrl(item.image || item.product_image || item.product?.image || ''),
-          color_id: item.color_id || item.color?.id,
-          color_name: item.color_name || item.color?.name,
-          color_hex: item.color_hex || item.color?.hex_value
-        }));
-      } else if (cartData.items && typeof cartData.items === 'object') {
-        // Handle case where items might be an object with keys
-        cartItems = Object.values(cartData.items).map((item: any) => ({
-          id: item.id?.toString() || item.cart_item_id?.toString() || `item-${Date.now()}-${Math.random()}`,
-          product_id: item.product_id?.toString() || item.product?.id?.toString() || '',
-          name: item.name || item.product_name || item.product?.name || 'Unnamed Product',
-          price: this.parsePrice(item.price || item.product_price || item.product?.price || 0),
-          quantity: parseInt(item.quantity || '1'),
-          image: this.normalizeImageUrl(item.image || item.product_image || item.product?.image || ''),
-          color_id: item.color_id || item.color?.id,
-          color_name: item.color_name || item.color?.name,
-          color_hex: item.color_hex || item.color?.hex_value
+          image: this.normalizeImageUrl(item.product?.image || ''),
+          color_id: item.color_id,
+          color_name: item.color_name,
+          color_hex: item.color_hex
         }));
       }
 
       // Extract session key if available
-      const sessionKey = cartData.session_key || data.session_key;
+      const sessionKey = data.session_key;
       if (sessionKey) {
         // Store the session key for future use
         localStorage.setItem(this.SESSION_KEY_STORAGE, sessionKey);
@@ -606,16 +558,16 @@ export class CartService {
       }
 
       // Extract delivery fee from API response
-      const deliveryFee = cartData.delivery !== undefined ? Number(cartData.delivery) : 0;
+      const deliveryFee = data.delivery !== undefined ? Number(data.delivery) : 0;
       console.log('🚚 Delivery fee from API:', deliveryFee);
 
       const transformedCart: CartResponse = {
-        id: cartData.id?.toString() || cartData.cart_id?.toString() || `cart-${Date.now()}`,
+        id: data.id?.toString() || `cart-${Date.now()}`,
         items: cartItems,
-        total: this.parsePrice(cartData.total || cartData.total_price || cartData.total_amount || 0),
-        item_count: parseInt(cartData.item_count || cartData.items_count || cartData.count || cartItems.length || '0'),
-        created_at: cartData.created_at || cartData.created || new Date().toISOString(),
-        updated_at: cartData.updated_at || cartData.updated || new Date().toISOString(),
+        total: this.parsePrice(data.total || 0),
+        item_count: parseInt(data.item_count || cartItems.length || '0'),
+        created_at: data.created_at || new Date().toISOString(),
+        updated_at: data.updated_at || new Date().toISOString(),
         session_key: sessionKey,
         delivery: deliveryFee // Include delivery fee in the response
       };
@@ -713,7 +665,7 @@ export class CartService {
       const sessionKey = this.getSessionKey();
       
       // Add session key as query parameter
-      const url = `${this.API_BASE_URL}${this.GET_CART_ENDPOINT}?session_key=${encodeURIComponent(sessionKey)}`;
+      const url = `${this.API_BASE_URL}${this.CART_ENDPOINT}current/?session_key=${encodeURIComponent(sessionKey)}`;
       
       const response = await fetch(url, {
         method: 'GET',

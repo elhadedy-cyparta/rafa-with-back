@@ -1,22 +1,10 @@
 // Order API service for RAFAL e-commerce website
-import { Product } from '../types/Product';
+import { CartItem } from './cartApi';
 
 export interface OrderItem {
   product_id: string | number;
   quantity: number;
   color_hex?: string;
-}
-
-export interface OrderAddress {
-  first_name: string;
-  second_name: string;
-  email?: string;
-  phone: string;
-  country: string;
-  city: string;
-  region: string;
-  address: string;
-  apartment?: string;
 }
 
 export interface DirectBuyRequest {
@@ -49,6 +37,7 @@ export interface CheckoutRequest {
   shipping_address: string;
   payment_method: 'Cash' | 'Card';
   items: OrderItem[];
+  session_key?: string;
 }
 
 export interface OrderResponse {
@@ -56,7 +45,7 @@ export interface OrderResponse {
   order_number: string;
   status: string;
   total: number;
-  items: OrderItem[];
+  items: any[];
   shipping_address: string;
   payment_method: string;
   created_at: string;
@@ -65,11 +54,11 @@ export interface OrderResponse {
 }
 
 export class OrderService {
-  private static readonly API_BASE_URL = 'https://apirafal.cyparta.com';
-  private static readonly CHECKOUT_ENDPOINT = '/cart/checkout/';
-  private static readonly DIRECT_BUY_ENDPOINT = '/order/checkout_now/';
-  private static readonly ORDER_HISTORY_ENDPOINT = '/order/history/';
-  private static readonly ORDER_DETAILS_ENDPOINT = '/order/details/';
+  private static readonly API_BASE_URL = 'http://localhost:8000';
+  private static readonly CHECKOUT_ENDPOINT = '/api/orders/checkout/';
+  private static readonly DIRECT_BUY_ENDPOINT = '/api/orders/checkout_now/';
+  private static readonly ORDER_HISTORY_ENDPOINT = '/api/orders/history/';
+  private static readonly ORDER_DETAILS_ENDPOINT = '/api/orders/history/';
 
   // Default headers for API requests
   private static getHeaders(includeAuth: boolean = false): HeadersInit {
@@ -99,11 +88,6 @@ export class OrderService {
       
       // Format phone number to remove leading zeros
       const formattedPhone = orderData.phone.replace(/\s+/g, '').replace(/^0+/, '');
-      
-      // Create shipping address string if not provided
-      if (!orderData.shipping_address) {
-        orderData.shipping_address = `${orderData.address} _ ${orderData.apartment || ''}`;
-      }
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
@@ -190,8 +174,19 @@ export class OrderService {
         };
       }
 
-      // Transform API response to our OrderResponse interface
-      return this.transformOrderResponse(data);
+      // Return the order response
+      return {
+        id: data.id || '',
+        order_number: data.order_number || '',
+        status: data.order?.status || 'pending',
+        total: this.parsePrice(data.order?.total || 0),
+        items: data.order?.items || [],
+        shipping_address: data.order?.shipping_address || '',
+        payment_method: data.order?.payment_method || orderData.payment_method,
+        created_at: data.order?.created_at || new Date().toISOString(),
+        success: data.success || false,
+        message: data.message || ''
+      };
     } catch (error) {
       console.error('❌ Error during direct buy now:', error);
       return {
@@ -220,28 +215,18 @@ export class OrderService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
       
-      // Get session key from localStorage
-      const sessionKey = localStorage.getItem('rafal_cart_session_key');
-      
-      // Create the URL with session key as query parameter
-      const url = `${this.API_BASE_URL}${this.CHECKOUT_ENDPOINT}${sessionKey ? `?session_key=${encodeURIComponent(sessionKey)}` : ''}`;
-      
-      // Ensure each item has a default color_hex if not provided
-      const itemsWithDefaultColor = checkoutData.items.map(item => ({
-        ...item,
-        color_hex: item.color_hex || '#000000' // Default to black if no color specified
-      }));
+      // Get session key from localStorage if not provided
+      const sessionKey = checkoutData.session_key || localStorage.getItem('rafal_cart_session_key');
       
       const requestData = {
         ...checkoutData,
         phone: formattedPhone,
-        items: itemsWithDefaultColor
+        session_key: sessionKey
       };
       
       console.log('📦 Checkout request data:', requestData);
-      console.log('🔗 Checkout URL with session key:', url);
       
-      const response = await fetch(url, {
+      const response = await fetch(`${this.API_BASE_URL}${this.CHECKOUT_ENDPOINT}`, {
         method: 'POST',
         headers: this.getHeaders(true),
         body: JSON.stringify(requestData),
@@ -310,8 +295,19 @@ export class OrderService {
         };
       }
 
-      // Transform API response to our OrderResponse interface
-      return this.transformOrderResponse(data);
+      // Return the order response
+      return {
+        id: data.id || '',
+        order_number: data.order_number || '',
+        status: data.order?.status || 'pending',
+        total: this.parsePrice(data.order?.total || 0),
+        items: data.order?.items || [],
+        shipping_address: data.order?.shipping_address || '',
+        payment_method: data.order?.payment_method || checkoutData.payment_method,
+        created_at: data.order?.created_at || new Date().toISOString(),
+        success: data.success || false,
+        message: data.message || ''
+      };
     } catch (error) {
       console.error('❌ Error during checkout:', error);
       return {
@@ -357,8 +353,6 @@ export class OrderService {
         console.log('📦 Raw Order History API response:', data);
       } catch (jsonError) {
         console.error('❌ Failed to parse JSON response for order history:', jsonError);
-        const textResponse = await response.text();
-        console.log('📄 Raw text response:', textResponse);
         return [];
       }
 
@@ -366,11 +360,31 @@ export class OrderService {
       let orders: OrderResponse[] = [];
       
       if (Array.isArray(data)) {
-        orders = data.map(order => this.transformOrderResponse(order));
-      } else if (data.orders && Array.isArray(data.orders)) {
-        orders = data.orders.map((order: any) => this.transformOrderResponse(order));
-      } else if (data.data && Array.isArray(data.data)) {
-        orders = data.data.map((order: any) => this.transformOrderResponse(order));
+        orders = data.map(order => ({
+          id: order.id || '',
+          order_number: order.order_number || '',
+          status: order.status || 'pending',
+          total: this.parsePrice(order.total || 0),
+          items: order.items || [],
+          shipping_address: order.shipping_address || '',
+          payment_method: order.payment_method || '',
+          created_at: order.created_at || new Date().toISOString(),
+          success: true,
+          message: ''
+        }));
+      } else if (data.results && Array.isArray(data.results)) {
+        orders = data.results.map((order: any) => ({
+          id: order.id || '',
+          order_number: order.order_number || '',
+          status: order.status || 'pending',
+          total: this.parsePrice(order.total || 0),
+          items: order.items || [],
+          shipping_address: order.shipping_address || '',
+          payment_method: order.payment_method || '',
+          created_at: order.created_at || new Date().toISOString(),
+          success: true,
+          message: ''
+        }));
       }
       
       return orders;
@@ -408,92 +422,25 @@ export class OrderService {
         console.log('📦 Raw Order Details API response:', data);
       } catch (jsonError) {
         console.error(`❌ Failed to parse JSON response for order ${orderId}:`, jsonError);
-        const textResponse = await response.text();
-        console.log('📄 Raw text response:', textResponse);
         return null;
       }
 
-      // Transform API response to our OrderResponse interface
-      return this.transformOrderResponse(data);
+      // Return the order response
+      return {
+        id: data.id || '',
+        order_number: data.order_number || '',
+        status: data.status || 'pending',
+        total: this.parsePrice(data.total || 0),
+        items: data.items || [],
+        shipping_address: data.shipping_address || '',
+        payment_method: data.payment_method || '',
+        created_at: data.created_at || new Date().toISOString(),
+        success: true,
+        message: ''
+      };
     } catch (error) {
       console.error(`❌ Error fetching details for order ${orderId}:`, error);
       return null;
-    }
-  }
-
-  // Transform order API response
-  private static transformOrderResponse(data: any): OrderResponse {
-    if (!data) {
-      console.warn('⚠️ Order API returned null or undefined data');
-      return {
-        id: '',
-        order_number: '',
-        status: 'unknown',
-        total: 0,
-        items: [],
-        shipping_address: '',
-        payment_method: '',
-        created_at: new Date().toISOString(),
-        success: false,
-        message: 'Invalid response from server'
-      };
-    }
-
-    try {
-      // Check if order was successful
-      const success = data.success === true || !!data.id || !!data.order_id || !!data.order_number;
-      
-      // Extract order data from various possible structures
-      let orderData = data;
-      if (data.order) {
-        orderData = data.order;
-      } else if (data.data && data.data.order) {
-        orderData = data.data.order;
-      }
-
-      // Extract items
-      let items: OrderItem[] = [];
-      if (Array.isArray(orderData.items)) {
-        items = orderData.items.map((item: any) => ({
-          product_id: item.product_id || item.id,
-          quantity: item.quantity || 1,
-          color_hex: item.color_hex || '#000000' // Default to black if no color specified
-        }));
-      } else if (orderData.product_id) {
-        // Single product order
-        items = [{
-          product_id: orderData.product_id,
-          quantity: orderData.quantity || 1,
-          color_hex: orderData.color_hex || '#000000' // Default to black if no color specified
-        }];
-      }
-
-      return {
-        id: orderData.id?.toString() || orderData.order_id?.toString() || '',
-        order_number: orderData.order_number || orderData.number || `ORD-${Date.now()}`,
-        status: orderData.status || 'processing',
-        total: this.parsePrice(orderData.total || orderData.total_price || 0),
-        items: items,
-        shipping_address: orderData.shipping_address || '',
-        payment_method: orderData.payment_method || 'Cash',
-        created_at: orderData.created_at || orderData.created || new Date().toISOString(),
-        success: success,
-        message: data.message || ''
-      };
-    } catch (error) {
-      console.error('❌ Error transforming order response:', error);
-      return {
-        id: '',
-        order_number: '',
-        status: 'error',
-        total: 0,
-        items: [],
-        shipping_address: '',
-        payment_method: '',
-        created_at: new Date().toISOString(),
-        success: false,
-        message: 'Error processing order response'
-      };
     }
   }
 

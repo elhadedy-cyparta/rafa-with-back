@@ -11,8 +11,8 @@ export interface Category {
 }
 
 export class CategoryService {
-  private static readonly API_BASE_URL = 'https://apirafal.cyparta.com';
-  private static readonly CATEGORY_ENDPOINT = '/category/';
+  private static readonly API_BASE_URL = 'http://localhost:8000';
+  private static readonly CATEGORY_ENDPOINT = '/api/products/categories/';
   private static readonly CACHE_KEY = 'rafal_categories_cache';
   private static readonly CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 
@@ -146,15 +146,9 @@ export class CategoryService {
     if (Array.isArray(data)) {
       categoriesArray = data;
       console.log(`📋 Category API response is direct array with ${data.length} items`);
-    } else if (data.data && Array.isArray(data.data)) {
-      categoriesArray = data.data;
-      console.log(`📋 Category API response has data property with ${data.data.length} items`);
     } else if (data.results && Array.isArray(data.results)) {
       categoriesArray = data.results;
       console.log(`📋 Category API response has results property with ${data.results.length} items`);
-    } else if (data.categories && Array.isArray(data.categories)) {
-      categoriesArray = data.categories;
-      console.log(`📋 Category API response has categories property with ${data.categories.length} items`);
     } else if (typeof data === 'object') {
       // If it's a single category object, wrap it in an array
       categoriesArray = [data];
@@ -176,14 +170,14 @@ export class CategoryService {
       })
       .map((category, index) => {
         const transformedCategory = {
-          id: category.id?.toString() || category.uuid?.toString() || category.slug || `category-${Date.now()}-${index}`,
-          name: category.name || category.title || category.category_name || 'Unnamed Category',
-          description: category.description || category.subtitle || category.content || '',
-          image: this.normalizeImageUrl(category.image || category.image_url || category.thumbnail),
-          wall_image: this.normalizeImageUrl(category.wall_image || category.wallImage || category.background_image),
-          cat_image: this.normalizeImageUrl(category.cat_image || category.catImage || category.category_image),
-          isActive: this.parseActiveStatus(category),
-          order: this.parseOrder(category, index)
+          id: category.id?.toString() || `category-${Date.now()}-${index}`,
+          name: category.name || 'Unnamed Category',
+          description: category.description || '',
+          image: this.normalizeImageUrl(category.image),
+          wall_image: this.normalizeImageUrl(category.wall_image),
+          cat_image: this.normalizeImageUrl(category.cat_image),
+          isActive: category.is_active !== undefined ? Boolean(category.is_active) : true,
+          order: category.order || index
         };
         
         console.log(`🔄 Transformed category ${index + 1}:`, {
@@ -212,30 +206,6 @@ export class CategoryService {
 
     console.log(`✅ Final result: ${transformedCategories.length} valid categories`);
     return transformedCategories;
-  }
-
-  // Parse active status from various possible fields
-  private static parseActiveStatus(category: any): boolean {
-    if (category.isActive !== undefined) return Boolean(category.isActive);
-    if (category.active !== undefined) return Boolean(category.active);
-    if (category.enabled !== undefined) return Boolean(category.enabled);
-    if (category.published !== undefined) return Boolean(category.published);
-    if (category.status !== undefined) {
-      const status = category.status.toString().toLowerCase();
-      return status === 'active' || status === 'published' || status === 'enabled';
-    }
-    
-    // Default to true if no status field found
-    return true;
-  }
-
-  // Parse order from various possible fields
-  private static parseOrder(category: any, fallbackIndex: number): number {
-    if (category.order !== undefined) return Number(category.order) || fallbackIndex;
-    if (category.sort !== undefined) return Number(category.sort) || fallbackIndex;
-    if (category.position !== undefined) return Number(category.position) || fallbackIndex;
-    if (category.priority !== undefined) return Number(category.priority) || fallbackIndex;
-    return fallbackIndex;
   }
 
   // Normalize image URLs to ensure they're absolute

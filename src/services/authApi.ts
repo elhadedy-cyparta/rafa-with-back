@@ -20,9 +20,9 @@ export interface AuthResponse {
 }
 
 export class AuthService {
-  private static readonly API_BASE_URL = 'https://apirafal.cyparta.com';
-  private static readonly LOGIN_ENDPOINT = '/api/login/';
-  private static readonly REGISTER_ENDPOINT = '/api/register/';
+  private static readonly API_BASE_URL = 'http://localhost:8000';
+  private static readonly LOGIN_ENDPOINT = '/api/users/token/';
+  private static readonly REGISTER_ENDPOINT = '/api/users/register/';
   private static readonly USER_STORAGE_KEY = 'rafal_user';
   private static readonly TOKEN_STORAGE_KEY = 'rafal_auth_token';
 
@@ -83,21 +83,60 @@ export class AuthService {
           user: {} as User,
           token: '',
           success: false,
-          message: data.message || data.error || data.detail || 'Login failed'
+          message: data.detail || 'Login failed'
         };
       }
 
-      // Transform API response to our AuthResponse interface
-      const authResponse = this.transformLoginResponse(data);
+      // Extract token from response
+      const token = data.access;
       
-      if (authResponse.success) {
-        // Store user data and token in localStorage
-        localStorage.setItem(this.USER_STORAGE_KEY, JSON.stringify(authResponse.user));
-        localStorage.setItem(this.TOKEN_STORAGE_KEY, authResponse.token);
-        console.log('✅ User logged in successfully:', authResponse.user.name);
+      if (!token) {
+        return {
+          user: {} as User,
+          token: '',
+          success: false,
+          message: 'No token received from server'
+        };
       }
-
-      return authResponse;
+      
+      // Get user profile with the token
+      const userResponse = await fetch(`${this.API_BASE_URL}/api/users/profile/me/`, {
+        method: 'GET',
+        headers: {
+          ...this.getHeaders(),
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!userResponse.ok) {
+        return {
+          user: {} as User,
+          token,
+          success: false,
+          message: 'Failed to fetch user profile'
+        };
+      }
+      
+      const userData = await userResponse.json();
+      
+      // Create user object
+      const user: User = {
+        id: userData.id,
+        name: `${userData.first_name} ${userData.last_name}`.trim() || 'User',
+        email: userData.email || '',
+        phone: userData.phone || formattedPhone,
+        token
+      };
+      
+      // Store user data and token
+      localStorage.setItem(this.USER_STORAGE_KEY, JSON.stringify(user));
+      localStorage.setItem(this.TOKEN_STORAGE_KEY, token);
+      
+      return {
+        user,
+        token,
+        success: true
+      };
     } catch (error) {
       console.error('❌ Error during login:', error);
       return {
@@ -105,68 +144,6 @@ export class AuthService {
         token: '',
         success: false,
         message: error instanceof Error ? error.message : 'Unknown error during login'
-      };
-    }
-  }
-
-  // Transform login API response
-  private static transformLoginResponse(data: any): AuthResponse {
-    if (!data) {
-      console.warn('⚠️ Login API returned null or undefined data');
-      return {
-        user: {} as User,
-        token: '',
-        success: false,
-        message: 'Invalid response from server'
-      };
-    }
-
-    try {
-      // Check if login was successful
-      const success = data.success === true || !!data.token || !!data.access_token || !!data.user;
-      
-      // Extract token from various possible fields
-      const token = data.token || data.access_token || data.auth_token || '';
-      
-      // Extract user data from various possible structures
-      let userData: any = {};
-      
-      if (data.user) {
-        userData = data.user;
-      } else if (data.data && data.data.user) {
-        userData = data.data.user;
-      } else if (success) {
-        // If login was successful but no user data, use whatever fields are available
-        userData = {
-          id: data.id || data.user_id || '',
-          name: data.name || data.username || data.full_name || '',
-          email: data.email || '',
-          phone: data.phone || data.phone_number || ''
-        };
-      }
-
-      // Create standardized user object
-      const user: User = {
-        id: userData.id?.toString() || '',
-        name: userData.name || userData.username || userData.full_name || 'User',
-        email: userData.email || '',
-        phone: userData.phone || userData.phone_number || '',
-        token: token
-      };
-
-      return {
-        user,
-        token,
-        success,
-        message: data.message || ''
-      };
-    } catch (error) {
-      console.error('❌ Error transforming login response:', error);
-      return {
-        user: {} as User,
-        token: '',
-        success: false,
-        message: 'Error processing login response'
       };
     }
   }
@@ -213,8 +190,12 @@ export class AuthService {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify({
-          ...userData,
-          phone: formattedPhone
+          phone: formattedPhone,
+          password: userData.password,
+          password2: userData.password2 || userData.password,
+          email: userData.email || '',
+          first_name: userData.first_name || userData.username || '',
+          last_name: userData.last_name || ''
         }),
         signal: controller.signal
       });
@@ -227,11 +208,38 @@ export class AuthService {
       console.log('📦 Raw Register API response:', data);
 
       if (!response.ok) {
+        let errorMessage = 'Registration failed';
+        
+        // Try to extract error messages
+        if (data) {
+          if (typeof data === 'object') {
+            // Flatten error messages from different fields
+            const errorMessages = Object.entries(data)
+              .filter(([key, value]) => key !== 'success' && key !== 'message')
+              .map(([key, value]) => {
+                if (Array.isArray(value)) {
+                  return `${key}: ${value.join(', ')}`;
+                }
+                return `${key}: ${value}`;
+              });
+            
+            if (errorMessages.length > 0) {
+              errorMessage = errorMessages.join('; ');
+            } else if (data.message) {
+              errorMessage = data.message;
+            } else if (data.detail) {
+              errorMessage = data.detail;
+            }
+          } else if (typeof data === 'string') {
+            errorMessage = data;
+          }
+        }
+        
         return {
           user: {} as User,
           token: '',
           success: false,
-          message: data.message || data.error || data.detail || 'Registration failed'
+          message: errorMessage
         };
       }
 

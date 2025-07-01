@@ -13,8 +13,9 @@ export interface PaymentResponse {
 }
 
 export class PaymentService {
-  private static readonly API_BASE_URL = 'https://apirafal.cyparta.com';
-  private static readonly PAYMENT_CHECKER_ENDPOINT = '/payment/payment_checker/';
+  private static readonly API_BASE_URL = 'http://localhost:8000';
+  private static readonly PAYMENT_CHECKER_ENDPOINT = '/api/payments/payment_checker/';
+  private static readonly PAYMENT_VERIFY_ENDPOINT = '/api/payments/verify/';
 
   // Default headers for API requests
   private static getHeaders(includeAuth: boolean = false): HeadersInit {
@@ -45,11 +46,12 @@ export class PaymentService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
       
+      // Determine which provider to use
+      const provider = options.fawry ? 'fawry' : options.aman ? 'aman' : 'paymob';
+      
       const requestData = {
         pk: orderId,
-        fawry: options.fawry,
-        aman: options.aman
-        // Note: paymob is used by default if both fawry and aman are false
+        provider
       };
       
       console.log('📦 Payment checker request data:', requestData);
@@ -75,7 +77,7 @@ export class PaymentService {
         };
       }
 
-      // Check if we have a redirect URL (for Paymob)
+      // Check if we have a redirect URL or redirect path
       if (data.redirect_url) {
         console.log('✅ Payment gateway redirect URL received:', data.redirect_url);
         return {
@@ -83,21 +85,22 @@ export class PaymentService {
           redirect_url: data.redirect_url,
           payment_id: data.payment_id || data.id
         };
-      }
-      
-      // If no redirect URL but response is OK, it might be Fawry or Aman
-      if (options.fawry || options.aman) {
+      } else if (data.redirect) {
+        // If we have a redirect path, construct the full URL
+        const redirectUrl = `${this.API_BASE_URL}${data.redirect}`;
+        console.log('✅ Payment gateway redirect path received, constructed URL:', redirectUrl);
         return {
           success: true,
-          message: 'Payment method selected successfully',
+          redirect_url: redirectUrl,
           payment_id: data.payment_id || data.id
         };
       }
       
-      // Fallback error
+      // If no redirect URL but response is OK
       return {
-        success: false,
-        message: 'No payment gateway information received'
+        success: true,
+        message: data.message || 'Payment method selected successfully',
+        payment_id: data.payment_id || data.id
       };
     } catch (error) {
       console.error('❌ Error checking payment options:', error);
@@ -116,9 +119,10 @@ export class PaymentService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
       
-      const response = await fetch(`${this.API_BASE_URL}/payment/verify/${paymentId}/`, {
-        method: 'GET',
+      const response = await fetch(`${this.API_BASE_URL}${this.PAYMENT_VERIFY_ENDPOINT}`, {
+        method: 'POST',
         headers: this.getHeaders(true),
+        body: JSON.stringify({ payment_id: paymentId }),
         signal: controller.signal
       });
 
@@ -136,8 +140,20 @@ export class PaymentService {
         };
       }
 
+      // Check if we have a redirect URL for verification
+      if (data.redirect) {
+        // If we have a redirect path, construct the full URL
+        const redirectUrl = `${this.API_BASE_URL}${data.redirect}`;
+        console.log('✅ Payment verification redirect path received, constructed URL:', redirectUrl);
+        return {
+          success: true,
+          redirect_url: redirectUrl,
+          payment_id: paymentId
+        };
+      }
+
       // Check payment status
-      const isSuccess = data.success === true || data.status === 'success' || data.is_success === true;
+      const isSuccess = data.success === true;
       
       return {
         success: isSuccess,

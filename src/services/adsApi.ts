@@ -12,8 +12,8 @@ export interface AdBanner {
 }
 
 export class AdsService {
-  private static readonly API_BASE_URL = 'https://apirafal.cyparta.com';
-  private static readonly ADS_ENDPOINT = '/Ads/';
+  private static readonly API_BASE_URL = 'http://localhost:8000';
+  private static readonly ADS_ENDPOINT = '/api/ads/';
   private static readonly CACHE_KEY = 'rafal_ads_cache';
   private static readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
@@ -129,15 +129,9 @@ export class AdsService {
     if (Array.isArray(data)) {
       adsArray = data;
       console.log(`📋 API response is direct array with ${data.length} items`);
-    } else if (data.data && Array.isArray(data.data)) {
-      adsArray = data.data;
-      console.log(`📋 API response has data property with ${data.data.length} items`);
     } else if (data.results && Array.isArray(data.results)) {
       adsArray = data.results;
       console.log(`📋 API response has results property with ${data.results.length} items`);
-    } else if (data.ads && Array.isArray(data.ads)) {
-      adsArray = data.ads;
-      console.log(`📋 API response has ads property with ${data.ads.length} items`);
     } else if (typeof data === 'object') {
       // If it's a single ad object, wrap it in an array
       adsArray = [data];
@@ -159,15 +153,15 @@ export class AdsService {
       })
       .map((ad, index) => {
         const transformedAd = {
-          id: ad.id?.toString() || ad.uuid?.toString() || `ad-${Date.now()}-${index}`,
-          title: ad.title || ad.name || ad.heading || 'RAFAL Advertisement',
-          description: ad.description || ad.subtitle || ad.content || '',
-          image_ad: this.normalizeImageUrl(ad.image_ad || ad.image || ad.banner),
-          link: ad.link || ad.url || ad.href || '',
+          id: ad.id?.toString() || `ad-${Date.now()}-${index}`,
+          title: ad.title || 'RAFAL Advertisement',
+          description: ad.description || '',
+          image_ad: this.normalizeImageUrl(ad.image_ad),
+          link: ad.link || '',
           isActive: this.parseActiveStatus(ad),
           priority: this.parsePriority(ad, index),
-          startDate: ad.startDate || ad.start_date,
-          endDate: ad.endDate || ad.end_date
+          startDate: ad.start_date,
+          endDate: ad.end_date
         };
         
         console.log(`🔄 Transformed ad ${index + 1}:`, {
@@ -200,20 +194,14 @@ export class AdsService {
 
   // Parse active status from various possible fields
   private static parseActiveStatus(ad: any): boolean {
+    if (ad.is_active !== undefined) return Boolean(ad.is_active);
     if (ad.isActive !== undefined) return Boolean(ad.isActive);
-    if (ad.active !== undefined) return Boolean(ad.active);
-    if (ad.enabled !== undefined) return Boolean(ad.enabled);
-    if (ad.published !== undefined) return Boolean(ad.published);
-    if (ad.status !== undefined) {
-      const status = ad.status.toString().toLowerCase();
-      return status === 'active' || status === 'published' || status === 'enabled';
-    }
     
     // Check date ranges if available
-    if (ad.startDate || ad.endDate) {
+    if (ad.start_date || ad.end_date) {
       const now = new Date();
-      if (ad.startDate && new Date(ad.startDate) > now) return false;
-      if (ad.endDate && new Date(ad.endDate) < now) return false;
+      if (ad.start_date && new Date(ad.start_date) > now) return false;
+      if (ad.end_date && new Date(ad.end_date) < now) return false;
     }
     
     // Default to true if no status field found
@@ -223,8 +211,6 @@ export class AdsService {
   // Parse priority from various possible fields
   private static parsePriority(ad: any, fallbackIndex: number): number {
     if (ad.priority !== undefined) return Number(ad.priority) || fallbackIndex;
-    if (ad.order !== undefined) return Number(ad.order) || fallbackIndex;
-    if (ad.sort !== undefined) return Number(ad.sort) || fallbackIndex;
     return fallbackIndex;
   }
 

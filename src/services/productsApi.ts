@@ -4,11 +4,12 @@ export interface Product {
   name: string;
   description?: string;
   price: number;
-  originalPrice?: number;
+  original_price?: number;
   image: string;
   images?: string[];
   additional_images?: string[]; // Raw field from API
   category: string;
+  category_name?: string;
   categoryId?: string;
   rating: number;
   reviews: number;
@@ -44,14 +45,14 @@ export interface ProductsResponse {
 }
 
 export class ProductsService {
-  private static readonly API_BASE_URL = 'https://apirafal.cyparta.com';
-  private static readonly PRODUCTS_ENDPOINT = '/products/';
+  private static readonly API_BASE_URL = 'http://localhost:8000';
+  private static readonly PRODUCTS_ENDPOINT = '/api/products/';
   private static readonly CACHE_KEY = 'rafal_products_cache';
   private static readonly PRODUCT_DETAILS_CACHE_KEY = 'rafal_product_details_cache';
   private static readonly CATEGORY_PRODUCTS_CACHE_KEY = 'rafal_category_products_cache';
   private static readonly CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
 
-  // Simplified headers to avoid CORS issues
+  // Default headers for API requests
   private static getHeaders(): HeadersInit {
     return {
       'Accept': 'application/json, text/plain, */*',
@@ -67,13 +68,14 @@ export class ProductsService {
         name: 'RAFAL Care Hair Dryer',
         description: 'Professional hair dryer with advanced technology for salon-quality results at home.',
         price: 1600,
-        originalPrice: 1999,
+        original_price: 1999,
         image: 'https://images.pexels.com/photos/7697820/pexels-photo-7697820.jpeg?auto=compress&cs=tinysrgb&w=400',
         images: [
           'https://images.pexels.com/photos/7697820/pexels-photo-7697820.jpeg?auto=compress&cs=tinysrgb&w=400',
           'https://images.pexels.com/photos/3373745/pexels-photo-3373745.jpeg?auto=compress&cs=tinysrgb&w=400'
         ],
         category: 'beauty',
+        category_name: 'Beauty & Care',
         categoryId: '4',
         rating: 4.5,
         reviews: 0,
@@ -108,13 +110,14 @@ export class ProductsService {
         name: 'RAFAL Kitchen Mixer Pro',
         description: 'Professional kitchen mixer for all your cooking needs.',
         price: 2400,
-        originalPrice: 2800,
+        original_price: 2800,
         image: 'https://images.pexels.com/photos/4686819/pexels-photo-4686819.jpeg?auto=compress&cs=tinysrgb&w=400',
         images: [
           'https://images.pexels.com/photos/4686819/pexels-photo-4686819.jpeg?auto=compress&cs=tinysrgb&w=400',
           'https://images.pexels.com/photos/1599791/pexels-photo-1599791.jpeg?auto=compress&cs=tinysrgb&w=400'
         ],
         category: 'kitchen',
+        category_name: 'Kitchen Appliances',
         categoryId: '1',
         rating: 4.8,
         reviews: 156,
@@ -143,13 +146,14 @@ export class ProductsService {
         name: 'RAFAL Steam Iron',
         description: 'High-quality steam iron for perfect results.',
         price: 800,
-        originalPrice: 1200,
+        original_price: 1200,
         image: 'https://images.pexels.com/photos/5591576/pexels-photo-5591576.jpeg?auto=compress&cs=tinysrgb&w=400',
         images: [
           'https://images.pexels.com/photos/5591576/pexels-photo-5591576.jpeg?auto=compress&cs=tinysrgb&w=400',
           'https://images.pexels.com/photos/2724749/pexels-photo-2724749.jpeg?auto=compress&cs=tinysrgb&w=400'
         ],
         category: 'home',
+        category_name: 'Home Appliances',
         categoryId: '2',
         rating: 4.3,
         reviews: 89,
@@ -184,7 +188,7 @@ export class ProductsService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
       
-      const url = `${this.API_BASE_URL}${this.PRODUCTS_ENDPOINT}?pagination=True&category_ids=${categoryId}&page=${page}&page_size=${pageSize}`;
+      const url = `${this.API_BASE_URL}${this.PRODUCTS_ENDPOINT}?category=${categoryId}&page=${page}&page_size=${pageSize}`;
       
       const response = await fetch(url, {
         method: 'GET',
@@ -213,7 +217,7 @@ export class ProductsService {
         return productsResponse;
       } else {
         console.warn(`⚠️ Category Products API returned no products for category ${categoryId}, using fallback`);
-        const fallbackProducts = this.getFallbackProducts().filter(p => p.categoryId === categoryId);
+        const fallbackProducts = this.getFallbackProducts().filter(p => p.categoryId === categoryId || p.category === categoryId);
         return {
           count: fallbackProducts.length,
           next: null,
@@ -239,7 +243,7 @@ export class ProductsService {
       
       // Return fallback products if no cache available
       console.log(`🔄 Using fallback products for category ${categoryId}`);
-      const fallbackProducts = this.getFallbackProducts().filter(p => p.categoryId === categoryId);
+      const fallbackProducts = this.getFallbackProducts().filter(p => p.categoryId === categoryId || p.category === categoryId);
       return {
         count: fallbackProducts.length,
         next: null,
@@ -270,7 +274,7 @@ export class ProductsService {
       return allProducts.slice(0, maxProducts);
     } catch (error) {
       console.error(`❌ Error fetching all products for category ${categoryId}:`, error);
-      return this.getFallbackProducts().filter(p => p.categoryId === categoryId);
+      return this.getFallbackProducts().filter(p => p.categoryId === categoryId || p.category === categoryId);
     }
   }
 
@@ -387,30 +391,31 @@ export class ProductsService {
 
     try {
       const transformedProduct: Product = {
-        id: data.id?.toString() || data.uuid?.toString() || data.sku || `product-${Date.now()}`,
-        name: data.name || data.title || data.product_name || 'Unnamed Product',
-        description: data.description || data.content || data.details || data.about_item || '',
-        price: this.parsePrice(data.price || data.current_price || data.selling_price || 0),
-        originalPrice: this.parsePrice(data.original_price || data.regular_price || data.list_price || data.old_price),
-        image: this.normalizeImageUrl(data.image || data.main_image || data.thumbnail || data.featured_image),
-        images: this.parseImages(data.images || data.gallery || data.additional_images),
-        additional_images: this.parseImages(data.additional_images), // Keep raw field
-        category: data.category || data.category_name || data.category_slug || 'general',
-        categoryId: data.category_id?.toString() || data.categoryId?.toString(),
-        rating: this.parseRating(data.rating || data.average_rating || data.stars || data.avg_rating || 0),
-        reviews: parseInt(data.reviews || data.review_count || data.total_reviews || data.total_ratings_count || '0'),
-        inStock: this.parseStockStatus(data),
-        isOffer: this.parseOfferStatus(data),
-        isBestSeller: this.parseBestSellerStatus(data),
-        features: this.parseFeatures(data.features || data.specifications || data.attributes),
-        colors: this.parseColors(data.colors || data.available_colors || data.color_options),
-        color: this.parseApiColors(data.color), // Parse API color data with hex values
-        brand: data.brand || data.manufacturer || 'RAFAL',
-        sku: data.sku || data.product_code || data.item_code,
-        weight: data.weight || data.weight_kg,
-        dimensions: data.dimensions || data.size,
-        warranty: data.warranty || data.warranty_period,
-        tags: this.parseTags(data.tags || data.keywords)
+        id: data.id?.toString() || `product-${Date.now()}`,
+        name: data.name || 'Unnamed Product',
+        description: data.description || '',
+        price: this.parsePrice(data.price || 0),
+        original_price: this.parsePrice(data.original_price),
+        image: this.normalizeImageUrl(data.image),
+        images: this.parseImages(data.images),
+        additional_images: this.parseImages(data.images), // Keep raw field
+        category: data.category?.toString() || '',
+        category_name: data.category_name || '',
+        categoryId: data.category?.toString() || '',
+        rating: this.parseRating(data.rating || 0),
+        reviews: data.reviews_count || 0,
+        inStock: data.in_stock !== undefined ? Boolean(data.in_stock) : true,
+        isOffer: data.is_offer !== undefined ? Boolean(data.is_offer) : false,
+        isBestSeller: data.is_best_seller !== undefined ? Boolean(data.is_best_seller) : false,
+        features: this.parseFeatures(data.features),
+        colors: this.parseColors(data.colors),
+        color: this.parseApiColors(data.colors), // Parse API color data with hex values
+        brand: data.brand || 'RAFAL',
+        sku: data.sku || '',
+        weight: data.weight || '',
+        dimensions: data.dimensions || '',
+        warranty: data.warranty || '',
+        tags: this.parseTags(data.tags)
       };
 
       console.log('🔄 Transformed single product:', {
@@ -461,7 +466,7 @@ export class ProductsService {
       .filter(color => color && typeof color === 'object')
       .map(color => ({
         id: color.id || Math.random(),
-        hex_value: color.hex_value || color.hexValue || color.color || '#000000',
+        hex_value: color.hex_value || '#000000',
         quantity: parseInt(color.quantity || '0'),
         price: this.parsePrice(color.price || 0),
         old_price: color.old_price ? this.parsePrice(color.old_price) : undefined,
@@ -483,7 +488,7 @@ export class ProductsService {
       .filter(img => img && typeof img === 'object')
       .map(img => ({
         id: img.id || Math.random(),
-        image: this.normalizeImageUrl(img.image || img.url || img.src)
+        image: this.normalizeImageUrl(img.image || '')
       }))
       .filter(img => img.image);
   }
@@ -533,7 +538,7 @@ export class ProductsService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
       
-      const url = `${this.API_BASE_URL}${this.PRODUCTS_ENDPOINT}?pagination=True&page=${page}&page_size=${pageSize}`;
+      const url = `${this.API_BASE_URL}${this.PRODUCTS_ENDPOINT}?page=${page}&page_size=${pageSize}`;
       
       const response = await fetch(url, {
         method: 'GET',
@@ -634,9 +639,9 @@ export class ProductsService {
     }
 
     // Handle paginated response structure
-    const count = data.count || data.total || 0;
+    const count = data.count || 0;
     const next = data.next || null;
-    const previous = data.previous || data.prev || null;
+    const previous = data.previous || null;
     
     // Get products array from various possible structures
     let productsArray: any[] = [];
@@ -644,15 +649,9 @@ export class ProductsService {
     if (data.results && Array.isArray(data.results)) {
       productsArray = data.results;
       console.log(`📋 Products API response has results property with ${data.results.length} items`);
-    } else if (data.data && Array.isArray(data.data)) {
-      productsArray = data.data;
-      console.log(`📋 Products API response has data property with ${data.data.length} items`);
     } else if (Array.isArray(data)) {
       productsArray = data;
       console.log(`📋 Products API response is direct array with ${data.length} items`);
-    } else if (data.products && Array.isArray(data.products)) {
-      productsArray = data.products;
-      console.log(`📋 Products API response has products property with ${data.products.length} items`);
     } else {
       console.warn('⚠️ Unrecognized Products API response structure:', typeof data, data);
       return {
@@ -675,30 +674,31 @@ export class ProductsService {
       })
       .map((product, index) => {
         const transformedProduct: Product = {
-          id: product.id?.toString() || product.uuid?.toString() || product.sku || `product-${Date.now()}-${index}`,
-          name: product.name || product.title || product.product_name || 'Unnamed Product',
-          description: product.description || product.content || product.details || product.about_item || '',
-          price: this.parsePrice(product.price || product.current_price || product.selling_price || 0),
-          originalPrice: this.parsePrice(product.original_price || product.regular_price || product.list_price || product.old_price),
-          image: this.normalizeImageUrl(product.image || product.main_image || product.thumbnail || product.featured_image),
-          images: this.parseImages(product.images || product.gallery || product.additional_images),
-          additional_images: this.parseImages(product.additional_images), // Keep raw field
-          category: product.category || product.category_name || product.category_slug || 'general',
-          categoryId: product.category_id?.toString() || product.categoryId?.toString(),
-          rating: this.parseRating(product.rating || product.average_rating || product.stars || product.avg_rating || 0),
-          reviews: parseInt(product.reviews || product.review_count || product.total_reviews || product.total_ratings_count || '0'),
-          inStock: this.parseStockStatus(product),
-          isOffer: this.parseOfferStatus(product),
-          isBestSeller: this.parseBestSellerStatus(product),
-          features: this.parseFeatures(product.features || product.specifications || product.attributes),
-          colors: this.parseColors(product.colors || product.available_colors || product.color_options),
-          color: this.parseApiColors(product.color), // Parse API color data with hex values
-          brand: product.brand || product.manufacturer || 'RAFAL',
-          sku: product.sku || product.product_code || product.item_code,
-          weight: product.weight || product.weight_kg,
-          dimensions: product.dimensions || product.size,
-          warranty: product.warranty || product.warranty_period,
-          tags: this.parseTags(product.tags || product.keywords)
+          id: product.id?.toString() || `product-${Date.now()}-${index}`,
+          name: product.name || 'Unnamed Product',
+          description: product.description || '',
+          price: this.parsePrice(product.price || 0),
+          original_price: this.parsePrice(product.original_price),
+          image: this.normalizeImageUrl(product.image),
+          images: this.parseImages(product.images),
+          additional_images: this.parseImages(product.images), // Keep raw field
+          category: product.category?.toString() || '',
+          category_name: product.category_name || '',
+          categoryId: product.category?.toString() || '',
+          rating: this.parseRating(product.rating || 0),
+          reviews: product.reviews_count || 0,
+          inStock: product.in_stock !== undefined ? Boolean(product.in_stock) : true,
+          isOffer: product.is_offer !== undefined ? Boolean(product.is_offer) : false,
+          isBestSeller: product.is_best_seller !== undefined ? Boolean(product.is_best_seller) : false,
+          features: this.parseFeatures(product.features),
+          colors: this.parseColors(product.colors),
+          color: this.parseApiColors(product.colors), // Parse API color data with hex values
+          brand: product.brand || 'RAFAL',
+          sku: product.sku || '',
+          weight: product.weight || '',
+          dimensions: product.dimensions || '',
+          warranty: product.warranty || '',
+          tags: this.parseTags(product.tags)
         };
         
         console.log(`🔄 Transformed product ${index + 1}:`, {
@@ -753,78 +753,21 @@ export class ProductsService {
     return Math.max(0, Math.min(5, numericRating));
   }
 
-  // Parse stock status from various possible fields
-  private static parseStockStatus(product: any): boolean {
-    if (product.inStock !== undefined) return Boolean(product.inStock);
-    if (product.in_stock !== undefined) return Boolean(product.in_stock);
-    if (product.available !== undefined) return Boolean(product.available);
-    if (product.stock !== undefined) return Number(product.stock) > 0;
-    if (product.quantity !== undefined) return Number(product.quantity) > 0;
-    if (product.stock_quantity !== undefined) return Number(product.stock_quantity) > 0;
-    
-    // Check status field
-    if (product.status !== undefined) {
-      const status = product.status.toString().toLowerCase();
-      return status === 'active' || status === 'available' || status === 'in_stock';
-    }
-    
-    // Default to true if no stock field found
-    return true;
-  }
-
-  // Parse offer status
-  private static parseOfferStatus(product: any): boolean {
-    if (product.isOffer !== undefined) return Boolean(product.isOffer);
-    if (product.is_offer !== undefined) return Boolean(product.is_offer);
-    if (product.on_sale !== undefined) return Boolean(product.on_sale);
-    if (product.discounted !== undefined) return Boolean(product.discounted);
-    
-    // Check if there's a price difference indicating an offer
-    const price = this.parsePrice(product.price || product.current_price);
-    const originalPrice = this.parsePrice(product.original_price || product.regular_price || product.old_price);
-    
-    return originalPrice > 0 && price < originalPrice;
-  }
-
-  // Parse best seller status
-  private static parseBestSellerStatus(product: any): boolean {
-    if (product.isBestSeller !== undefined) return Boolean(product.isBestSeller);
-    if (product.is_best_seller !== undefined) return Boolean(product.is_best_seller);
-    if (product.bestseller !== undefined) return Boolean(product.bestseller);
-    if (product.featured !== undefined) return Boolean(product.featured);
-    if (product.popular !== undefined) return Boolean(product.popular);
-    
-    // Check if high rating/reviews indicate best seller
-    const rating = this.parseRating(product.rating || product.average_rating || product.avg_rating);
-    const reviews = parseInt(product.reviews || product.review_count || product.total_ratings_count || '0');
-    
-    return rating >= 4.5 && reviews >= 100;
-  }
-
   // Parse features array
   private static parseFeatures(features: any): string[] {
-    if (Array.isArray(features)) return features.map(f => String(f));
-    if (typeof features === 'string') {
-      return features.split(',').map(f => f.trim()).filter(f => f.length > 0);
-    }
+    if (Array.isArray(features)) return features.map(f => String(f.feature || f));
     return [];
   }
 
   // Parse colors array
   private static parseColors(colors: any): string[] {
-    if (Array.isArray(colors)) return colors.map(c => String(c));
-    if (typeof colors === 'string') {
-      return colors.split(',').map(c => c.trim()).filter(c => c.length > 0);
-    }
+    if (Array.isArray(colors)) return colors.map(c => String(c.name || c));
     return [];
   }
 
   // Parse tags array
   private static parseTags(tags: any): string[] {
-    if (Array.isArray(tags)) return tags.map(t => String(t));
-    if (typeof tags === 'string') {
-      return tags.split(',').map(t => t.trim()).filter(t => t.length > 0);
-    }
+    if (Array.isArray(tags)) return tags.map(t => String(t.name || t));
     return [];
   }
 
@@ -838,18 +781,11 @@ export class ProductsService {
             return this.normalizeImageUrl(img);
           } else if (img && typeof img === 'object') {
             // Handle image objects with url, src, image, or path properties
-            const imageUrl = img.url || img.src || img.image || img.path || img.file;
+            const imageUrl = img.image || '';
             return imageUrl ? this.normalizeImageUrl(imageUrl) : '';
           }
           return '';
         })
-        .filter(url => url.length > 0);
-    }
-    
-    if (typeof images === 'string') {
-      // Handle comma-separated image URLs
-      return images.split(',')
-        .map(img => this.normalizeImageUrl(img.trim()))
         .filter(url => url.length > 0);
     }
     
@@ -924,7 +860,7 @@ export class ProductsService {
       return this.fetchAllProductsByCategory(categoryId);
     } catch (error) {
       console.error(`❌ Error fetching products for category ${categoryId}:`, error);
-      return this.getFallbackProducts().filter(p => p.categoryId === categoryId);
+      return this.getFallbackProducts().filter(p => p.categoryId === categoryId || p.category === categoryId);
     }
   }
 
@@ -950,11 +886,80 @@ export class ProductsService {
   // Get featured products
   static async getFeaturedProducts(): Promise<Product[]> {
     try {
-      const allProducts = await this.getAllProducts();
-      return allProducts.filter(product => product.isBestSeller || product.isOffer).slice(0, 8);
+      console.log('🔄 Fetching featured products from RAFAL API...');
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+      
+      const url = `${this.API_BASE_URL}${this.PRODUCTS_ENDPOINT}featured/`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getHeaders(),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Featured Products API request failed with status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Transform API response
+      const featuredProducts = this.transformApiResponse(data);
+      
+      if (featuredProducts.results.length > 0) {
+        console.log(`✅ Successfully fetched ${featuredProducts.results.length} featured products`);
+        return featuredProducts.results;
+      } else {
+        console.warn('⚠️ No featured products found, using fallback');
+        return this.getFallbackProducts().filter(p => p.isOffer || p.isBestSeller);
+      }
     } catch (error) {
       console.error('Error fetching featured products:', error);
-      return this.getFallbackProducts();
+      return this.getFallbackProducts().filter(p => p.isOffer || p.isBestSeller);
+    }
+  }
+
+  // Get best seller products
+  static async getBestSellerProducts(): Promise<Product[]> {
+    try {
+      console.log('🔄 Fetching best seller products from RAFAL API...');
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+      
+      const url = `${this.API_BASE_URL}${this.PRODUCTS_ENDPOINT}best_sellers/`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getHeaders(),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Best Seller Products API request failed with status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Transform API response
+      const bestSellerProducts = this.transformApiResponse(data);
+      
+      if (bestSellerProducts.results.length > 0) {
+        console.log(`✅ Successfully fetched ${bestSellerProducts.results.length} best seller products`);
+        return bestSellerProducts.results;
+      } else {
+        console.warn('⚠️ No best seller products found, using fallback');
+        return this.getFallbackProducts().filter(p => p.isBestSeller);
+      }
+    } catch (error) {
+      console.error('Error fetching best seller products:', error);
+      return this.getFallbackProducts().filter(p => p.isBestSeller);
     }
   }
 
@@ -1010,7 +1015,7 @@ export class ProductsService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
       
-      const response = await fetch(`${this.API_BASE_URL}${this.PRODUCTS_ENDPOINT}?pagination=True&page=1&page_size=1`, {
+      const response = await fetch(`${this.API_BASE_URL}${this.PRODUCTS_ENDPOINT}?page=1&page_size=1`, {
         method: 'GET',
         headers: this.getHeaders(),
         signal: controller.signal
@@ -1047,16 +1052,46 @@ export class ProductsService {
   // Search products
   static async searchProducts(query: string): Promise<Product[]> {
     try {
-      const allProducts = await this.getAllProducts();
-      const searchTerm = query.toLowerCase();
+      console.log(`🔄 Searching products with query: "${query}"...`);
       
-      return allProducts.filter(product => 
-        product.name.toLowerCase().includes(searchTerm) ||
-        product.description?.toLowerCase().includes(searchTerm) ||
-        product.category.toLowerCase().includes(searchTerm) ||
-        product.brand?.toLowerCase().includes(searchTerm) ||
-        product.tags?.some(tag => tag.toLowerCase().includes(searchTerm))
-      );
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+      
+      const url = `${this.API_BASE_URL}${this.PRODUCTS_ENDPOINT}?search=${encodeURIComponent(query)}`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getHeaders(),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Search API request failed with status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Transform API response
+      const searchResults = this.transformApiResponse(data);
+      
+      if (searchResults.results.length > 0) {
+        console.log(`✅ Successfully found ${searchResults.results.length} products matching "${query}"`);
+        return searchResults.results;
+      } else {
+        console.warn(`⚠️ No products found matching "${query}", using fallback search`);
+        // Fallback to local search in cached products
+        const allProducts = await this.getAllProducts();
+        const searchTerm = query.toLowerCase();
+        return allProducts.filter(product => 
+          product.name.toLowerCase().includes(searchTerm) ||
+          product.description?.toLowerCase().includes(searchTerm) ||
+          product.category.toLowerCase().includes(searchTerm) ||
+          product.brand?.toLowerCase().includes(searchTerm) ||
+          product.tags?.some(tag => tag.toLowerCase().includes(searchTerm))
+        );
+      }
     } catch (error) {
       console.error('Error searching products:', error);
       return [];
