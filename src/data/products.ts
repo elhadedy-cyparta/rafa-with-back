@@ -216,11 +216,38 @@ export const getProductsByCategory = async (categoryId: string): Promise<Product
 // Get featured products from RAFAL API or static data
 export const getFeaturedProducts = async (): Promise<Product[]> => {
   try {
-    const allProducts = await getProducts();
-    return allProducts.filter(product => product.isBestSeller || product.isOffer).slice(0, 8);
+    console.log('🔍 Fetching featured products from RAFAL API...');
+    const featuredProducts = await ProductsService.getFeaturedProducts();
+    
+    if (featuredProducts.length > 0) {
+      console.log(`✅ Found ${featuredProducts.length} featured products`);
+      return featuredProducts;
+    } else {
+      console.warn('⚠️ No featured products found in RAFAL API, using fallback');
+      return staticProducts.filter(product => product.isBestSeller || product.isOffer).slice(0, 8);
+    }
   } catch (error) {
     console.error('Error getting featured products:', error);
     return staticProducts.filter(product => product.isBestSeller || product.isOffer).slice(0, 8);
+  }
+};
+
+// Get best seller products from RAFAL API or static data
+export const getBestSellerProducts = async (): Promise<Product[]> => {
+  try {
+    console.log('🔍 Fetching best seller products from RAFAL API...');
+    const bestSellerProducts = await ProductsService.getBestSellerProducts();
+    
+    if (bestSellerProducts.length > 0) {
+      console.log(`✅ Found ${bestSellerProducts.length} best seller products`);
+      return bestSellerProducts;
+    } else {
+      console.warn('⚠️ No best seller products found in RAFAL API, using fallback');
+      return staticProducts.filter(product => product.isBestSeller).slice(0, 8);
+    }
+  } catch (error) {
+    console.error('Error getting best seller products:', error);
+    return staticProducts.filter(product => product.isBestSeller).slice(0, 8);
   }
 };
 
