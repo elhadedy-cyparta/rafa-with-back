@@ -13,7 +13,6 @@ class Payment(models.Model):
     )
     
     PAYMENT_PROVIDER_CHOICES = (
-        ('stripe', _('Stripe')),
         ('paymob', _('Paymob')),
         ('fawry', _('Fawry')),
         ('aman', _('Aman')),

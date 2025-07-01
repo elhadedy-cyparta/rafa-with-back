@@ -43,6 +43,8 @@ INSTALLED_APPS = [
     'products.apps.ProductsConfig',
     'orders.apps.OrdersConfig',
     'payments.apps.PaymentsConfig',
+    'fawry_payment.apps.FawryPaymentConfig',
+    'paymob_payment.apps.PaymobPaymentConfig',
     'ads.apps.AdsConfig',
 ]
 
@@ -198,10 +200,6 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
-
-# Stripe settings
-STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')
-STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '')
 
 # Payment gateway settings
 PAYMOB_API_KEY = os.environ.get('PAYMOB_API_KEY', '')

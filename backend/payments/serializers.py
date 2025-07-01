@@ -25,8 +25,11 @@ class PaymentIntentSerializer(serializers.ModelSerializer):
 
 class PaymentCheckerSerializer(serializers.Serializer):
     pk = serializers.CharField(help_text="Order ID")
-    fawry = serializers.BooleanField(default=False, help_text="Use Fawry payment")
-    aman = serializers.BooleanField(default=False, help_text="Use Aman payment")
+    provider = serializers.ChoiceField(
+        choices=['paymob', 'fawry', 'aman'],
+        default='paymob',
+        help_text="Payment provider to use"
+    )
     
     def validate_pk(self, value):
         try:

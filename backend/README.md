@@ -24,7 +24,9 @@ This is the backend API for the RAFAL Electric E-commerce platform. It provides 
   - Order timeline for status updates
 
 - **Payment Processing**:
-  - Support for multiple payment providers (Paymob, Fawry, Aman)
+  - Modular payment gateway architecture
+  - Dedicated Fawry payment module
+  - Dedicated Paymob payment module
   - Payment verification and webhook handling
   - Secure payment intent creation
 
@@ -136,9 +138,35 @@ Once the server is running, you can access the API documentation at:
 - **Payments**:
   - `POST /api/payments/payment_checker/`: Initialize payment
   - `POST /api/payments/verify/`: Verify payment status
+  - `POST /api/payments/fawry/process/{order_id}/`: Process Fawry payment
+  - `POST /api/payments/fawry/verify/{payment_id}/`: Verify Fawry payment
+  - `POST /api/payments/paymob/process/{order_id}/`: Process Paymob payment
+  - `POST /api/payments/paymob/verify/{payment_id}/`: Verify Paymob payment
 
 - **Advertisements**:
   - `GET /api/ads/`: Get active advertisements
+
+## Payment Gateway Architecture
+
+The backend uses a modular approach for payment gateways:
+
+1. **Core Payment Module** (`payments`):
+   - Provides common models and interfaces
+   - Routes payment requests to appropriate provider
+
+2. **Fawry Payment Module** (`fawry_payment`):
+   - Handles Fawry-specific payment processing
+   - Manages Fawry callbacks and verification
+
+3. **Paymob Payment Module** (`paymob_payment`):
+   - Handles Paymob-specific payment processing
+   - Manages Paymob callbacks and verification
+
+This architecture allows for:
+- Easy addition of new payment providers
+- Isolation of provider-specific code
+- Simplified maintenance and updates
+- Better error handling and debugging
 
 ## License
 
