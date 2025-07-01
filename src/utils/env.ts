@@ -1,6 +1,7 @@
 // Environment variables utility with validation
 export const env = {
   YOUTUBE_API_KEY: import.meta.env.VITE_YOUTUBE_API_KEY,
+  API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
   isDevelopment: import.meta.env.DEV,
   isProduction: import.meta.env.PROD,
 } as const;
@@ -12,6 +13,10 @@ export const validateEnv = () => {
   
   if (!env.YOUTUBE_API_KEY) {
     warnings.push('VITE_YOUTUBE_API_KEY is not set. YouTube videos will use mock data.');
+  }
+  
+  if (!env.API_BASE_URL) {
+    warnings.push('VITE_API_BASE_URL is not set. Using default: http://localhost:8000');
   }
   
   // Log warnings in development

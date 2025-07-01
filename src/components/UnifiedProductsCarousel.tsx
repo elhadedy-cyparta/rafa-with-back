@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Star, Heart, ShoppingCart, RefreshCw, AlertCircle, Wifi, WifiOff, Loader } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
-import { getProducts, getFeaturedProducts } from '../data/products';
+import { getFeaturedProducts, getBestSellerProducts } from '../data/products';
 import { Product } from '../types/Product';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -29,16 +29,13 @@ const UnifiedProductsCarousel = () => {
 
       console.log('🔄 Loading products from RAFAL API...');
       
-      // Get all products and featured products
-      const [allProducts, featured] = await Promise.all([
-        getProducts(),
-        getFeaturedProducts()
+      // Get featured and best seller products
+      const [featured, bestSellers] = await Promise.all([
+        getFeaturedProducts(),
+        getBestSellerProducts()
       ]);
 
-      if (allProducts.length > 0) {
-        // Filter best sellers from all products
-        const bestSellers = allProducts.filter(product => product.isBestSeller);
-        
+      if (featured.length > 0 || bestSellers.length > 0) {
         setFeaturedProducts(featured);
         setBestSellerProducts(bestSellers);
         setConnectionStatus('connected');
@@ -74,7 +71,7 @@ const UnifiedProductsCarousel = () => {
   const productsPerSlide = 4;
   const totalSlides = Math.ceil(currentProducts.length / productsPerSlide);
 
-  // Auto-scroll functionality
+  // Auto-slide functionality
   useEffect(() => {
     if (totalSlides <= 1) return;
 
@@ -205,7 +202,7 @@ const UnifiedProductsCarousel = () => {
                   </button>
                   
                   <p className="text-xs text-gray-500 mt-3">
-                    API Endpoint: https://apirafal.cyparta.com/products/
+                    API Endpoint: http://localhost:8000/api/products/
                   </p>
                 </div>
               </div>
