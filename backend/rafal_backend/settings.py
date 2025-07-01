@@ -20,11 +20,23 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-key-for-development-o
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "False") == "True"
 
-ALLOWED_HOSTS =  ['*']
+
+ALLOWED_HOSTS = [
+    "localhost",
+    "127.0.0.1",
+    "d8c8kgcw4gowcscg4s4c40ck.apirafal.cyparta.com",
+    "apirafal.cyparta.com",
+]
 CSRF_TRUSTED_ORIGINS = [
     "https://d8c8kgcw4gowcscg4s4c40ck.apirafal.cyparta.com",
     "https://apirafal.cyparta.com",
 ]
+
+CORS_ALLOWED_ORIGINS = os.environ.get(
+    "CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,d8c8kgcw4gowcscg4s4c40ck.apirafal.cyparta.com,http://*.netlify.app,https://*.netlify.app"
+).split(",")
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
 
 # Application definition
 INSTALLED_APPS = [
@@ -187,11 +199,7 @@ SIMPLE_JWT = {
 }
 
 # CORS settings
-CORS_ALLOWED_ORIGINS = os.environ.get(
-    "CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,d8c8kgcw4gowcscg4s4c40ck.apirafal.cyparta.com,http://*.netlify.app,https://*.netlify.app"
-).split(",")
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_CREDENTIALS = True
+
 
 # Email settings
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
