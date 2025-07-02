@@ -2,6 +2,8 @@
 
 A modern, responsive e-commerce website for RAFAL electrical appliances built with React, TypeScript, and Tailwind CSS.
 
+
+
 ## 🌟 Features
 
 - 🛍️ **Complete E-commerce Functionality**
